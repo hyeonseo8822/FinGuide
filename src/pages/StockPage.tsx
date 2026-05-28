@@ -1,26 +1,29 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import styled, { keyframes } from 'styled-components';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ReferenceLine, ResponsiveContainer,
+} from 'recharts';
 import PageLayout from '../components/layout/PageLayout';
+import { generateStockPath, StockPoint } from '../utils/priceGenerator';
 
-// 주식 시뮬레이터: 실시간 차트 + 호가 정보 + 매수/매도 패널
+// 주식 시뮬레이터: GBM 기반 전문가 수준 차트 + 호가 + 매수/매도 패널
 // 실전 거래 화면을 단순화하여 초보자가 주식 용어를 체험하도록 설계
 
+// ──────────────────── Styled Components ────────────────────
+
 const pulseDot = keyframes`
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(1);   opacity: 1; }
+  50%  { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1);   opacity: 1; }
 `;
 
-// Layout
 const PageGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: ${({ theme }) => theme.spacing.md};
   align-items: start;
-
-  @media (min-width: 1024px) {
-    grid-template-columns: 8fr 4fr;
-  }
+  @media (min-width: 1024px) { grid-template-columns: 8fr 4fr; }
 `;
 
 const LeftCol = styled.div`
@@ -34,7 +37,6 @@ const RightCol = styled.div`
   top: 88px;
 `;
 
-// Header
 const SectionHeader = styled.section`
   margin-bottom: ${({ theme }) => theme.spacing.lg};
 `;
@@ -43,7 +45,6 @@ const HeaderRow = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing.md};
-
   @media (min-width: 768px) {
     flex-direction: row;
     justify-content: space-between;
@@ -85,12 +86,13 @@ const LiveDot = styled.div`
   animation: ${pulseDot} 1.5s infinite;
 `;
 
-// Stock Card
+// ── Main Stock Card ──
+
 const StockCard = styled.div`
   background: ${({ theme }) => theme.colors.white};
   border-radius: ${({ theme }) => theme.rounded.lg};
   padding: ${({ theme }) => `${theme.spacing.md} ${theme.spacing.lg}`};
-  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
   border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
 `;
 
@@ -99,6 +101,8 @@ const StockMeta = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: ${({ theme }) => theme.spacing.md};
+  flex-wrap: wrap;
+  gap: 12px;
 `;
 
 const StockName = styled.div`
@@ -112,18 +116,21 @@ const PriceRow = styled.div`
   display: flex;
   align-items: baseline;
   gap: 8px;
+  flex-wrap: wrap;
 `;
 
 const BigPrice = styled.span`
-  font-size: 48px;
+  font-size: clamp(32px, 5vw, 48px);
   font-weight: 800;
   color: ${({ theme }) => theme.colors.onSurface};
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 `;
 
 const PriceUnit = styled.span`
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
+  color: ${({ theme }) => theme.colors.onSurface};
 `;
 
 const PriceChange = styled.span<{ $up: boolean }>`
@@ -140,38 +147,102 @@ const StatsGrid = styled.div`
 `;
 
 const StatItem = styled.div`
-  p:first-child {
-    font-size: 12px;
-    color: ${({ theme }) => theme.colors.outline};
-  }
-  p:last-child {
-    font-size: 14px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.onSurface};
+  p:first-child { font-size: 11px; color: ${({ theme }) => theme.colors.outline}; }
+  p:last-child  { font-size: 13px; font-weight: 600; color: ${({ theme }) => theme.colors.onSurface}; }
+`;
+
+// ── Chart area ──
+
+const ChartHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+`;
+
+const ChartTitle = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.onSurfaceVariant};
+`;
+
+const LegendRow = styled.div`
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+`;
+
+const LegendItem = styled.div<{ $color: string; $dashed?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.onSurfaceVariant};
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 2px;
+    background: ${({ $dashed, $color }) => $dashed ? 'none' : $color};
+    border-top: ${({ $dashed, $color }) => $dashed ? `2px dashed ${$color}` : 'none'};
   }
 `;
 
-// Chart
-const ChartWrap = styled.div`
+const LegendDot = styled.div<{ $color: string }>`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.onSurfaceVariant};
+
+  &::before {
+    content: '';
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: ${({ $color }) => $color};
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px ${({ $color }) => $color};
+    display: inline-block;
+  }
+`;
+
+const ChartContainer = styled.div`
+  margin-top: ${({ theme }) => theme.spacing.md};
   height: 300px;
   width: 100%;
-  background: ${({ theme }) => theme.colors.white};
-  border-radius: ${({ theme }) => theme.rounded.DEFAULT};
-  border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
-  overflow: hidden;
-  position: relative;
-  margin-top: ${({ theme }) => theme.spacing.md};
 `;
 
-// Asset Info
+// Period selector tabs
+const PeriodRow = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+`;
+
+const PeriodBtn = styled.button<{ $active: boolean }>`
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: ${({ $active, theme }) => $active ? theme.colors.primary : theme.colors.surfaceContainerHigh};
+  color: ${({ $active, theme }) => $active ? theme.colors.onPrimary : theme.colors.onSurfaceVariant};
+  transition: all 0.15s;
+  &:hover { opacity: 0.85; }
+`;
+
+// ── Asset Info ──
+
 const AssetsGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: ${({ theme }) => theme.spacing.md};
-
-  @media (min-width: 768px) {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
+  @media (min-width: 768px) { grid-template-columns: 1fr 1fr 1fr; }
 `;
 
 const AssetCard = styled.div`
@@ -181,20 +252,21 @@ const AssetCard = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
 
   label {
-    font-size: 14px;
+    font-size: 13px;
     color: ${({ theme }) => theme.colors.outline};
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 `;
 
 const AssetValue = styled.p`
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.onSurface};
 `;
 
-// Order Book
+// ── Order Book ──
+
 const OrderBook = styled.div`
   background: ${({ theme }) => theme.colors.white};
   border-radius: ${({ theme }) => theme.rounded.DEFAULT};
@@ -206,7 +278,7 @@ const OrderBook = styled.div`
 const OrderBookTitle = styled.div`
   background: ${({ theme }) => theme.colors.surfaceContainerHigh};
   padding: 8px ${({ theme }) => theme.spacing.md};
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   border-bottom: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
 `;
@@ -214,21 +286,21 @@ const OrderBookTitle = styled.div`
 const OrderRow = styled.div<{ $side: 'buy' | 'sell' }>`
   display: flex;
   justify-content: space-between;
-  padding: 8px ${({ theme }) => theme.spacing.md};
-  border-bottom: 1px solid white;
+  padding: 7px ${({ theme }) => theme.spacing.md};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.white};
   cursor: pointer;
   background: ${({ $side }) => $side === 'sell' ? 'rgba(0,89,185,0.04)' : 'rgba(186,26,26,0.04)'};
-  transition: background 0.15s;
+  transition: background 0.12s;
 
   &:hover {
-    background: ${({ $side }) => $side === 'sell' ? 'rgba(0,89,185,0.08)' : 'rgba(186,26,26,0.08)'};
+    background: ${({ $side }) => $side === 'sell' ? 'rgba(0,89,185,0.09)' : 'rgba(186,26,26,0.09)'};
   }
 
   span:first-child {
     font-size: 13px;
     color: ${({ $side, theme }) => $side === 'sell' ? theme.colors.primary : theme.colors.dangerRed};
+    font-variant-numeric: tabular-nums;
   }
-
   span:last-child {
     font-size: 13px;
     font-family: monospace;
@@ -236,12 +308,13 @@ const OrderRow = styled.div<{ $side: 'buy' | 'sell' }>`
   }
 `;
 
-// Trading Panel
+// ── Trading Panel ──
+
 const TradingPanel = styled.div`
   background: ${({ theme }) => theme.colors.white};
   border-radius: ${({ theme }) => theme.rounded.lg};
   padding: ${({ theme }) => theme.spacing.lg};
-  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
 `;
 
@@ -268,32 +341,30 @@ const FormGroup = styled.div`
 const FormLabel = styled.label`
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.onSurfaceVariant};
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 `;
 
 const PriceInput = styled.div`
   position: relative;
-
   input {
     width: 100%;
     background: ${({ theme }) => theme.colors.surfaceContainerLow};
     border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
     border-radius: ${({ theme }) => theme.rounded.DEFAULT};
-    padding: 12px;
+    padding: 11px 12px;
     font-size: 16px;
     font-weight: 700;
     color: ${({ theme }) => theme.colors.onSurface};
-
+    font-variant-numeric: tabular-nums;
     &:focus {
       outline: none;
       border-color: ${({ theme }) => theme.colors.primary};
       box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.primary}33;
     }
   }
-
   span {
     position: absolute;
     right: 12px;
@@ -308,7 +379,6 @@ const QtyRow = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-
   button {
     width: 40px;
     height: 40px;
@@ -319,22 +389,19 @@ const QtyRow = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s;
-
+    transition: background 0.12s;
     &:hover { background: ${({ theme }) => theme.colors.surfaceContainerHighest}; }
   }
-
   input {
     flex: 1;
     background: ${({ theme }) => theme.colors.surfaceContainerLow};
     border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
     border-radius: ${({ theme }) => theme.rounded.DEFAULT};
-    padding: 12px;
+    padding: 11px;
     font-size: 16px;
     font-weight: 700;
     text-align: center;
     color: ${({ theme }) => theme.colors.onSurface};
-
     &:focus {
       outline: none;
       border-color: ${({ theme }) => theme.colors.primary};
@@ -347,14 +414,12 @@ const Summary = styled.div`
   border-radius: ${({ theme }) => theme.rounded.DEFAULT};
   padding: ${({ theme }) => theme.spacing.md};
   margin-bottom: ${({ theme }) => theme.spacing.md};
-
   > div {
     display: flex;
     justify-content: space-between;
     font-size: 13px;
-
     &:last-child {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       border-top: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
       padding-top: 8px;
@@ -367,7 +432,7 @@ const TradeBtn = styled.button<{ $type: 'buy' | 'sell' }>`
   width: 100%;
   background: ${({ $type, theme }) => $type === 'buy' ? theme.colors.primary : theme.colors.dangerRed};
   color: white;
-  padding: 16px;
+  padding: 15px;
   border-radius: ${({ theme }) => theme.rounded.DEFAULT};
   font-size: 16px;
   font-weight: 700;
@@ -380,9 +445,8 @@ const TradeBtn = styled.button<{ $type: 'buy' | 'sell' }>`
   box-shadow: ${({ $type }) => $type === 'buy'
     ? '0 8px 24px rgba(0,89,185,0.2)'
     : '0 8px 24px rgba(186,26,26,0.2)'};
-
-  &:hover { filter: brightness(1.1); }
-  &:active { transform: scale(0.95); }
+  &:hover  { filter: brightness(1.08); }
+  &:active { transform: scale(0.96); }
 `;
 
 const LearningGrid = styled.section`
@@ -390,10 +454,7 @@ const LearningGrid = styled.section`
   display: grid;
   grid-template-columns: 1fr;
   gap: ${({ theme }) => theme.spacing.md};
-
-  @media (min-width: 768px) {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  @media (min-width: 768px) { grid-template-columns: repeat(3, 1fr); }
 `;
 
 const LearningCard = styled.div`
@@ -401,89 +462,251 @@ const LearningCard = styled.div`
   border-radius: ${({ theme }) => theme.rounded.DEFAULT};
   padding: ${({ theme }) => theme.spacing.md};
   border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
-
-  h3 {
-    font-size: 16px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.onSurface};
-    margin: ${({ theme }) => theme.spacing.xs} 0;
-  }
-
-  p {
-    font-size: 14px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.onSurfaceVariant};
-    line-height: 1.5;
-  }
+  h3 { font-size: 15px; font-weight: 700; color: ${({ theme }) => theme.colors.onSurface}; margin: 6px 0; }
+  p  { font-size: 13px; font-weight: 600; color: ${({ theme }) => theme.colors.onSurfaceVariant}; line-height: 1.5; }
 `;
 
 const IconCircle = styled.div<{ $color: string }>`
-  width: 40px;
-  height: 40px;
+  width: 40px; height: 40px;
   background: white;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   box-shadow: ${({ theme }) => theme.shadows.card};
-  margin-bottom: 8px;
-
-  span.material-symbols-outlined {
-    font-size: 20px;
-    color: ${({ $color }) => $color};
-  }
+  margin-bottom: 6px;
+  span.material-symbols-outlined { font-size: 20px; color: ${({ $color }) => $color}; }
 `;
 
-// --- Chart SVG helper ---
-function buildPath(points: number[]): string {
-  if (points.length < 2) return '';
-  const w = 800;
-  const h = 300;
-  const step = w / (points.length - 1);
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
+// ──────────────────── Period config ────────────────────
 
-  const coords = points.map((p, i) => [
-    i * step,
-    h - ((p - min) / range) * (h - 40) - 20,
-  ]);
+const PERIODS: { label: string; weeks: number }[] = [
+  { label: '6M', weeks: 26 },
+  { label: '1Y', weeks: 52 },
+  { label: '2Y', weeks: 104 },
+  { label: '3Y', weeks: 156 },
+];
 
-  let d = `M${coords[0][0]},${coords[0][1]}`;
-  for (let i = 1; i < coords.length; i++) {
-    d += ` T${coords[i][0]},${coords[i][1]}`;
-  }
-  return d;
+// 6개월 평가 노드 인덱스 (priceGenerator의 STOCK_EVAL_WEEKS과 일치)
+const EVAL_WEEKS = [0, 26, 52, 78, 104, 130, 156];
+
+// ELS 임계값
+const REDEMPTION_LINE = 0.85;  // 조기상환 85%
+const KNOCKIN_LINE    = 0.50;  // 녹인 50%
+
+const BASE_PRICE = 50000;
+
+// ──────────────────── Custom Recharts components ────────────────────
+
+interface EvalDotProps {
+  cx?: number;
+  cy?: number;
+  payload?: StockPoint;
 }
 
+function EvalDot({ cx = 0, cy = 0, payload }: EvalDotProps) {
+  if (!payload?.isEvalNode || payload.index === 0) return null;
+  const aboveRedemption = payload.price >= REDEMPTION_LINE;
+  const belowKnockIn    = payload.price < KNOCKIN_LINE;
+  const color = belowKnockIn ? '#ba1a1a' : aboveRedemption ? '#006d37' : '#0059b9';
+
+  return (
+    <g key={`eval-${cx}-${cy}`}>
+      <circle cx={cx} cy={cy} r={6}  fill={color} stroke="white" strokeWidth={2} />
+      <circle cx={cx} cy={cy} r={11} fill={color} opacity={0.15} />
+    </g>
+  );
+}
+
+interface TooltipPayload {
+  payload?: StockPoint;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+}
+
+function ChartTooltip({ active, payload }: CustomTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const pt = payload[0].payload;
+  if (!pt) return null;
+  const pct = (pt.price * 100).toFixed(1);
+  const aboveRedemption = pt.price >= REDEMPTION_LINE;
+  const belowKnockIn    = pt.price < KNOCKIN_LINE;
+  const textColor = belowKnockIn ? '#ba1a1a' : aboveRedemption ? '#006d37' : '#0059b9';
+
+  return (
+    <div style={{
+      background: 'white',
+      border: '1px solid #c1c6d6',
+      borderRadius: 12,
+      padding: '8px 14px',
+      fontSize: 12,
+      fontWeight: 600,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.09)',
+      minWidth: 130,
+    }}>
+      <p style={{ color: '#727785', marginBottom: 3 }}>
+        {Math.round((pt.index / 52) * 12)}개월차
+      </p>
+      <p style={{ color: textColor, fontSize: 15, marginBottom: 2 }}>
+        {pt.krwPrice.toLocaleString()}원
+      </p>
+      <p style={{ color: '#727785', fontSize: 11 }}>{pct}% (시작가 대비)</p>
+      {pt.isEvalNode && pt.index > 0 && (
+        <p style={{ color: '#006d37', fontSize: 10, marginTop: 4 }}>
+          📍 {Math.round((pt.index / 52) * 12)}개월 평가일
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────── Reference line labels ────────────────────
+
+interface RefLabelProps {
+  viewBox?: { x?: number; y?: number; width?: number };
+  label: string;
+  color: string;
+  above?: boolean;
+}
+
+function RefLabel({ viewBox, label, color, above = true }: RefLabelProps) {
+  if (!viewBox) return null;
+  const { x = 0, y = 0, width = 0 } = viewBox;
+  return (
+    <text
+      x={x + width - 4}
+      y={above ? y - 5 : y + 13}
+      textAnchor="end"
+      fontSize={10}
+      fontWeight={700}
+      fill={color}
+    >
+      {label}
+    </text>
+  );
+}
+
+// ──────────────────── Main component ────────────────────
+
 export default function StockPage() {
-  const [price, setPrice] = useState(50441);
-  const [wallet, setWallet] = useState(1000000);
-  const [stocks, setStocks] = useState(0);
+  // Price & chart state
+  const [fullPath, setFullPath]           = useState<StockPoint[]>([]);
+  const [revealedCount, setRevealedCount] = useState(0);
+  const [selectedPeriod, setSelectedPeriod] = useState(3); // index into PERIODS (default 3Y)
+  const [isAnimating, setIsAnimating]     = useState(false);
+
+  // Live-ticker price (last revealed point's KRW)
+  const [price, setPrice] = useState(BASE_PRICE);
+
+  // Trading state
+  const [wallet, setWallet]   = useState(1_000_000);
+  const [stocks, setStocks]   = useState(0);
   const [avgPrice, setAvgPrice] = useState(0);
-  const [qty, setQty] = useState(1);
-  const [tab, setTab] = useState<'buy' | 'sell'>('buy');
-  const [chartPoints, setChartPoints] = useState([210, 190, 170, 180, 160, 150, 160, 170]);
+  const [qty, setQty]         = useState(1);
+  const [tab, setTab]         = useState<'buy' | 'sell'>('buy');
   const [notification, setNotification] = useState<string | null>(null);
-  const BASE_PRICE = 47600;
 
-  const priceRef = useRef(price);
-  priceRef.current = price;
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const BASE = 47600;
 
-  // 3초마다 가격 업데이트
+  // Generate path on mount and whenever period changes
   useEffect(() => {
-    const interval = setInterval(() => {
-      const change = Math.floor((Math.random() - 0.48) * 800);
-      const next = Math.max(10000, priceRef.current + change);
-      setPrice(next);
-      setChartPoints(prev => {
-        const newPts = [...prev.slice(1), 300 - ((next - 30000) / 30000) * 280];
-        return newPts;
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    const weeks = PERIODS[selectedPeriod].weeks;
+    const path  = generateStockPath(weeks, BASE_PRICE);
+    setFullPath(path);
+    setRevealedCount(0);
+    setIsAnimating(false);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+  }, [selectedPeriod]);
 
+  // Auto-start animation shortly after path is ready
+  useEffect(() => {
+    if (fullPath.length === 0 || isAnimating) return;
+
+    // Small delay so UI settles first
+    const startDelay = setTimeout(() => {
+      setRevealedCount(1);
+      setIsAnimating(true);
+    }, 300);
+
+    return () => clearTimeout(startDelay);
+  }, [fullPath, isAnimating]);
+
+  // Drive the animation tick
+  useEffect(() => {
+    if (!isAnimating || fullPath.length === 0) return;
+    if (revealedCount >= fullPath.length) {
+      setIsAnimating(false);
+      return;
+    }
+
+    intervalRef.current = setInterval(() => {
+      setRevealedCount(prev => {
+        const next = prev + 1;
+        const pt = fullPath[next - 1];
+        if (pt) setPrice(pt.krwPrice);
+        if (next >= fullPath.length) {
+          clearInterval(intervalRef.current!);
+          setIsAnimating(false);
+        }
+        return next;
+      });
+    }, 40); // 40ms/tick → 156 ticks ≈ 6.2s for 3Y
+
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isAnimating, fullPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After animation completes, continue with a slower live ticker
+  useEffect(() => {
+    if (isAnimating) return;
+    if (fullPath.length === 0) return;
+
+    const ticker = setInterval(() => {
+      setPrice(prev => {
+        const change = Math.floor((Math.random() - 0.48) * 400);
+        return Math.max(10000, prev + change);
+      });
+    }, 2000);
+
+    return () => clearInterval(ticker);
+  }, [isAnimating, fullPath]);
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  // Visible data slice (for animation reveal)
+  const visibleData = useMemo(
+    () => fullPath.slice(0, Math.max(revealedCount, 0)),
+    [fullPath, revealedCount]
+  );
+
+  // Latest visible point for color logic
+  const latestPt  = visibleData[visibleData.length - 1];
+  const isPositive = latestPt ? latestPt.price >= 1.0 : true;
+  const lineColor  = isPositive ? '#0059b9' : '#ba1a1a';
+  const gradId     = isPositive ? 'stockGradBlue' : 'stockGradRed';
+
+  // Y domain: pad 10% above/below the visible range
+  const yDomain = useMemo((): [number, number] => {
+    if (visibleData.length === 0) return [0.4, 1.6];
+    const prices = visibleData.map(p => p.price);
+    const mn = Math.min(...prices);
+    const mx = Math.max(...prices);
+    const pad = (mx - mn) * 0.15 || 0.1;
+    return [
+      parseFloat((Math.max(0.1, mn - pad)).toFixed(2)),
+      parseFloat((mx + pad).toFixed(2)),
+    ];
+  }, [visibleData]);
+
+  // X ticks: only eval nodes that are within the visible range
+  const xTicks = useMemo(
+    () => EVAL_WEEKS.filter(w => w <= (visibleData[visibleData.length - 1]?.index ?? 0)),
+    [visibleData]
+  );
+
+  // Trading
   const notify = useCallback((msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 2000);
@@ -497,29 +720,38 @@ export default function StockPage() {
         setAvgPrice(ap => stocks === 0 ? price : Math.round((ap * stocks + total) / (stocks + qty)));
         setStocks(s => s + qty);
         notify('매수 완료!');
-      } else {
-        notify('잔액이 부족합니다.');
-      }
+      } else notify('잔액이 부족합니다.');
     } else {
       if (stocks >= qty) {
         setWallet(w => w + price * qty);
         setStocks(s => s - qty);
         notify('매도 완료!');
-      } else {
-        notify('보유 수량이 부족합니다.');
-      }
+      } else notify('보유 수량이 부족합니다.');
     }
   }, [price, qty, wallet, stocks, notify]);
 
   const pnlValue = stocks > 0 ? (price - avgPrice) * stocks : 0;
-  const pnlPct = stocks > 0 && avgPrice > 0 ? ((pnlValue / (avgPrice * stocks)) * 100).toFixed(2) : '0.00';
-  const diff = price - BASE_PRICE;
-  const diffPct = ((diff / BASE_PRICE) * 100).toFixed(1);
-  const pathD = buildPath(chartPoints);
+  const pnlPct   = stocks > 0 && avgPrice > 0
+    ? ((pnlValue / (avgPrice * stocks)) * 100).toFixed(2)
+    : '0.00';
+  const diff    = price - BASE;
+  const diffPct = ((diff / BASE) * 100).toFixed(1);
+
+  // Replay animation
+  const replay = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setRevealedCount(0);
+    setTimeout(() => {
+      const weeks = PERIODS[selectedPeriod].weeks;
+      const path  = generateStockPath(weeks, BASE_PRICE);
+      setFullPath(path);
+      setIsAnimating(false);
+    }, 100);
+  }, [selectedPeriod]);
 
   return (
     <PageLayout>
-      {/* Notification toast */}
+      {/* Toast */}
       {notification && (
         <div style={{
           position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
@@ -546,7 +778,7 @@ export default function StockPage() {
 
       <PageGrid>
         <LeftCol>
-          {/* Stock Card */}
+          {/* ── Stock Card + Chart ── */}
           <StockCard>
             <StockMeta>
               <div>
@@ -567,26 +799,142 @@ export default function StockPage() {
               </StatsGrid>
             </StockMeta>
 
-            <ChartWrap>
-              <svg width="100%" height="100%" viewBox="0 0 800 300" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="chartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#005bbe" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#005bbe" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {pathD && (
-                  <>
-                    <path d={`${pathD} L800,300 L0,300 Z`} fill="url(#chartGrad)" />
-                    <path d={pathD} fill="none" stroke="#005bbe" strokeWidth="3" strokeLinecap="round" />
-                    <circle cx="800" cy={chartPoints[chartPoints.length - 1]} r="5" fill="#005bbe" />
-                  </>
-                )}
-              </svg>
-            </ChartWrap>
+            {/* Chart header */}
+            <ChartHeader>
+              <ChartTitle>GBM 기반 시뮬레이션 (KOSPI 200 근사)</ChartTitle>
+              <LegendRow>
+                <LegendItem $color="#006d37" $dashed>조기상환 85%</LegendItem>
+                <LegendItem $color="#ba1a1a" $dashed>녹인 50%</LegendItem>
+                <LegendDot $color="#0059b9">6개월 평가일</LegendDot>
+              </LegendRow>
+            </ChartHeader>
+
+            {/* Recharts AreaChart */}
+            <ChartContainer>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={visibleData}
+                  margin={{ top: 16, right: 8, left: -4, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="stockGradBlue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#0059b9" stopOpacity={0.20} />
+                      <stop offset="95%" stopColor="#0059b9" stopOpacity={0.01} />
+                    </linearGradient>
+                    <linearGradient id="stockGradRed" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#ba1a1a" stopOpacity={0.16} />
+                      <stop offset="95%" stopColor="#ba1a1a" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#e6e8f2"
+                    vertical={false}
+                  />
+
+                  <XAxis
+                    dataKey="index"
+                    ticks={xTicks}
+                    tickFormatter={w => `${Math.round((w / 52) * 12)}M`}
+                    tick={{ fontSize: 10, fill: '#727785', fontWeight: 600 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#c1c6d6' }}
+                  />
+
+                  <YAxis
+                    domain={yDomain}
+                    tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+                    tick={{ fontSize: 10, fill: '#727785' }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={40}
+                  />
+
+                  <RechartsTooltip
+                    content={<ChartTooltip />}
+                    cursor={{ stroke: '#c1c6d6', strokeWidth: 1, strokeDasharray: '4 2' }}
+                  />
+
+                  {/* 조기상환 기준선 — 초록 점선 */}
+                  <ReferenceLine
+                    y={REDEMPTION_LINE}
+                    stroke="#006d37"
+                    strokeDasharray="5 3"
+                    strokeWidth={1.5}
+                    label={
+                      <RefLabel
+                        label="조기상환 85%"
+                        color="#006d37"
+                        above
+                      />
+                    }
+                  />
+
+                  {/* 녹인 배리어 — 빨강 점선 */}
+                  <ReferenceLine
+                    y={KNOCKIN_LINE}
+                    stroke="#ba1a1a"
+                    strokeDasharray="5 3"
+                    strokeWidth={1.5}
+                    label={
+                      <RefLabel
+                        label="녹인 50%"
+                        color="#ba1a1a"
+                        above={false}
+                      />
+                    }
+                  />
+
+                  {/* 가격 경로 */}
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke={lineColor}
+                    strokeWidth={2}
+                    fill={`url(#${gradId})`}
+                    dot={(props) => (
+                      <EvalDot
+                        key={`dot-${props.index}`}
+                        cx={props.cx}
+                        cy={props.cy}
+                        payload={props.payload as StockPoint}
+                      />
+                    )}
+                    activeDot={{
+                      r: 5,
+                      fill: lineColor,
+                      stroke: 'white',
+                      strokeWidth: 2,
+                    }}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+
+            {/* Period selector + replay */}
+            <PeriodRow>
+              {PERIODS.map((p, i) => (
+                <PeriodBtn
+                  key={p.label}
+                  $active={selectedPeriod === i}
+                  onClick={() => setSelectedPeriod(i)}
+                >
+                  {p.label}
+                </PeriodBtn>
+              ))}
+              <PeriodBtn
+                $active={false}
+                onClick={replay}
+                style={{ marginLeft: 'auto' }}
+              >
+                ↺ 재생성
+              </PeriodBtn>
+            </PeriodRow>
           </StockCard>
 
-          {/* Assets */}
+          {/* ── Asset Summary ── */}
           <AssetsGrid>
             <AssetCard>
               <label>예수금 (가용 잔액)</label>
@@ -597,7 +945,7 @@ export default function StockPage() {
               <AssetValue style={{ color: pnlValue >= 0 ? '#ba1a1a' : '#0059b9' }}>
                 {pnlValue >= 0 ? '+' : ''}{pnlValue.toLocaleString()}원
               </AssetValue>
-              <span style={{ fontSize: 13, color: pnlValue >= 0 ? '#ba1a1a' : '#0059b9' }}>
+              <span style={{ fontSize: 12, color: pnlValue >= 0 ? '#ba1a1a' : '#0059b9' }}>
                 {pnlValue >= 0 ? '+' : ''}{pnlPct}%
               </span>
             </AssetCard>
@@ -607,7 +955,7 @@ export default function StockPage() {
             </AssetCard>
           </AssetsGrid>
 
-          {/* Order Book */}
+          {/* ── Order Book ── */}
           <OrderBook>
             <OrderBookTitle>호가 정보</OrderBookTitle>
             <OrderRow $side="sell"><span>{(price + 300).toLocaleString()}</span><span>1,245</span></OrderRow>
@@ -619,18 +967,18 @@ export default function StockPage() {
           </OrderBook>
         </LeftCol>
 
-        {/* Trading Panel */}
+        {/* ── Trading Panel ── */}
         <RightCol>
           <TradingPanel>
             <TabRow>
-              <Tab $active={tab === 'buy'} onClick={() => setTab('buy')}>매수</Tab>
+              <Tab $active={tab === 'buy'}  onClick={() => setTab('buy')}>매수</Tab>
               <Tab $active={tab === 'sell'} onClick={() => setTab('sell')}>매도</Tab>
             </TabRow>
 
             <FormGroup>
               <FormLabel>
                 <span>지정가격</span>
-                <span style={{ fontSize: 12, color: '#727785' }}>시장가 가능</span>
+                <span style={{ fontSize: 11, color: '#727785' }}>시장가 가능</span>
               </FormLabel>
               <PriceInput>
                 <input type="text" readOnly value={price.toLocaleString()} />
@@ -663,17 +1011,13 @@ export default function StockPage() {
               </div>
             </Summary>
 
-            <TradeBtn $type="buy" onClick={() => trade('buy')}>
-              매수하기
-            </TradeBtn>
-            <TradeBtn $type="sell" onClick={() => trade('sell')}>
-              매도하기
-            </TradeBtn>
+            <TradeBtn $type="buy"  onClick={() => trade('buy')}>매수하기</TradeBtn>
+            <TradeBtn $type="sell" onClick={() => trade('sell')}>매도하기</TradeBtn>
           </TradingPanel>
         </RightCol>
       </PageGrid>
 
-      {/* Learning Cards */}
+      {/* ── Learning Cards ── */}
       <LearningGrid>
         <LearningCard>
           <IconCircle $color="#0059b9">
