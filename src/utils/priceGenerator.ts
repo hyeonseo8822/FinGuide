@@ -75,72 +75,118 @@ export function findKnockInIndex(path: PricePoint[], barrierRatio: number): numb
 }
 
 // ─── Stock chart GBM (StockPage 전용) ───────────────────────────────────────
+// 일간 틱(1/252년 스텝)을 사용해 실제 KOSPI200/S&P500 차트와 유사한
+// 연속적이고 자연스러운 가격 경로를 생성합니다.
 
 export interface StockPoint {
-  /** 틱 인덱스 (0~N) */
+  /** 틱 인덱스 (0~N, 거래일 단위) */
   index: number;
-  /** 정규화 가격 (1.0 = 100%) */
+  /** 정규화 가격 (1.0 = 시작가 100%) */
   price: number;
-  /** 6개월 평가 노드 여부 */
+  /** 6개월(126 거래일) 단위 평가 노드 여부 */
   isEvalNode: boolean;
   /** 실제 원화 가격 (basePrice × price) */
   krwPrice: number;
 }
 
-// 6개월 평가 노드 (StockPage 동일 주기 사용)
-const STOCK_EVAL_WEEKS = [0, 26, 52, 78, 104, 130, 156];
+// 6개월 = 126 거래일 단위 평가 노드
+export const STOCK_EVAL_DAYS = [0, 126, 252, 378, 504, 630, 756] as const;
 
 /**
- * 주식 차트용 GBM 경로 생성
- * - 연간 변동성 20%, 약한 양의 드리프트(μ=0.04)
- * - 랜덤 충격 이벤트 최대 3회 (−10% ~ −25% 즉시 하락)
- * - 충격 후 완만한 회복 경향 포함
- * @param weeks 총 주 수 (기본 156 = 36개월)
- * @param basePrice 시작 원화 가격 (기본 50000)
+ * 일간 GBM 기반 주식 경로 생성
+ *
+ * 설계 원칙:
+ *  - Δt = 1/252 (거래일 기준)  → 일별 σ ≈ 1.26%, 주별처럼 보이는 큰 점프 없음
+ *  - 트렌드 교체: 40~80 거래일마다 모멘텀 방향이 서서히 반전
+ *  - 충격 이벤트: 최대 2회, −8%~−18% 즉각 하락 후 평균 회귀 바이어스 추가
+ *  - 클램프: [0.25, 2.80]
+ *
+ * @param tradingDays 생성할 거래일 수 (기본 756 = 3년)
+ * @param basePrice   시작 원화 가격 (기본 50000)
  */
-export function generateStockPath(weeks = 156, basePrice = 50000): StockPoint[] {
-  const VOL = 0.20;
-  const MU = 0.04;
-  const dt = 1 / 52;
+export function generateStockPath(tradingDays = 756, basePrice = 50000): StockPoint[] {
+  const VOL = 0.18;          // 연간 변동성 18%
+  const BASE_MU = 0.04;      // 기본 연간 드리프트 4%
+  const DT = 1 / 252;        // 일간 스텝
+  const MEAN_REVERT = 0.015; // 충격 후 평균 회귀 속도
 
-  // 충격 이벤트 위치: 최대 3개, 최소 간격 10주
-  const shockCount = Math.floor(Math.random() * 3);
-  const shockWeeks = new Set<number>();
+  // ── 충격 이벤트: 최대 2개, 최소 간격 40 거래일 ──
+  const shockCount = Math.random() < 0.7 ? Math.floor(Math.random() * 2) + 1 : 0;
+  const shockDays = new Set<number>();
   for (let i = 0; i < shockCount; i++) {
     let attempts = 0;
-    while (attempts++ < 30) {
-      const w = Math.floor(Math.random() * (weeks - 10)) + 5;
-      const tooClose = [...shockWeeks].some(sw => Math.abs(sw - w) < 10);
-      if (!tooClose) { shockWeeks.add(w); break; }
+    while (attempts++ < 40) {
+      const d = Math.floor(Math.random() * (tradingDays - 20)) + 10;
+      if (![...shockDays].some(sd => Math.abs(sd - d) < 40)) {
+        shockDays.add(d);
+        break;
+      }
     }
   }
+
+  // ── 트렌드 교체: 랜덤 길이 구간마다 모멘텀 부호 교체 ──
+  let trendMu = BASE_MU;
+  let trendRemaining = Math.floor(40 + Math.random() * 40);
+  let postShockRecovery = 0; // 충격 직후 회귀 바이어스 기간
 
   const path: StockPoint[] = [];
   let s = 1.0;
 
-  for (let w = 0; w <= weeks; w++) {
+  for (let d = 0; d <= tradingDays; d++) {
     path.push({
-      index: w,
+      index: d,
       price: parseFloat(s.toFixed(4)),
-      isEvalNode: STOCK_EVAL_WEEKS.includes(w),
+      isEvalNode: (STOCK_EVAL_DAYS as readonly number[]).includes(d),
       krwPrice: Math.round(s * basePrice),
     });
 
-    if (w >= weeks) break;
+    if (d >= tradingDays) break;
 
-    const z = gaussianRandom();
-    let logReturn = (MU - 0.5 * VOL ** 2) * dt + VOL * Math.sqrt(dt) * z;
-
-    // 충격 이벤트 적용 (즉각 낙폭)
-    if (shockWeeks.has(w + 1)) {
-      const shock = -(0.10 + Math.random() * 0.15); // −10% ~ −25%
-      logReturn += shock;
+    // 트렌드 교체 타이머
+    trendRemaining--;
+    if (trendRemaining <= 0) {
+      // 새 구간: 방향 ±, 크기 0~BASE_MU*2
+      trendMu = (Math.random() < 0.55 ? 1 : -1) * Math.random() * BASE_MU * 1.8;
+      trendRemaining = Math.floor(40 + Math.random() * 40);
     }
 
-    s = Math.max(0.20, Math.min(3.0, s * Math.exp(logReturn)));
+    // 충격 후 회귀 기간이면 상승 바이어스 추가
+    const recoveryMu = postShockRecovery > 0 ? MEAN_REVERT : 0;
+    if (postShockRecovery > 0) postShockRecovery--;
+
+    const z = gaussianRandom();
+    const mu = trendMu + recoveryMu;
+    let logReturn = (mu - 0.5 * VOL ** 2) * DT + VOL * Math.sqrt(DT) * z;
+
+    // 충격 이벤트 (해당 거래일에 즉각 적용)
+    if (shockDays.has(d + 1)) {
+      logReturn += -(0.08 + Math.random() * 0.10); // −8% ~ −18%
+      postShockRecovery = Math.floor(20 + Math.random() * 30); // 회귀 기간 20~50일
+    }
+
+    s = Math.max(0.25, Math.min(2.80, s * Math.exp(logReturn)));
   }
 
   return path;
+}
+
+/**
+ * 경로 마지막 지점에서 GBM 한 틱 연장 (라이브 티커용)
+ * 별도 랜덤 노이즈 대신 동일 GBM 모델로 연속성 유지
+ */
+export function extendStockPath(last: StockPoint, basePrice: number, dayIndex: number): StockPoint {
+  const VOL = 0.18;
+  const MU  = 0.04;
+  const DT  = 1 / 252;
+  const z   = gaussianRandom();
+  const logReturn = (MU - 0.5 * VOL ** 2) * DT + VOL * Math.sqrt(DT) * z;
+  const nextPrice = Math.max(0.25, Math.min(2.80, last.price * Math.exp(logReturn)));
+  return {
+    index: dayIndex,
+    price: parseFloat(nextPrice.toFixed(4)),
+    isEvalNode: (STOCK_EVAL_DAYS as readonly number[]).includes(dayIndex),
+    krwPrice: Math.round(nextPrice * basePrice),
+  };
 }
 
 /**

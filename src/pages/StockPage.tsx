@@ -5,7 +5,7 @@ import {
   Tooltip as RechartsTooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
 import PageLayout from '../components/layout/PageLayout';
-import { generateStockPath, StockPoint } from '../utils/priceGenerator';
+import { generateStockPath, extendStockPath, STOCK_EVAL_DAYS, StockPoint } from '../utils/priceGenerator';
 
 // 주식 시뮬레이터: GBM 기반 전문가 수준 차트 + 호가 + 매수/매도 패널
 // 실전 거래 화면을 단순화하여 초보자가 주식 용어를 체험하도록 설계
@@ -477,22 +477,28 @@ const IconCircle = styled.div<{ $color: string }>`
 `;
 
 // ──────────────────── Period config ────────────────────
+// 거래일 기준: 1년 ≈ 252 거래일, 6개월 ≈ 126 거래일
 
-const PERIODS: { label: string; weeks: number }[] = [
-  { label: '6M', weeks: 26 },
-  { label: '1Y', weeks: 52 },
-  { label: '2Y', weeks: 104 },
-  { label: '3Y', weeks: 156 },
+const PERIODS: { label: string; days: number }[] = [
+  { label: '6M', days: 126 },
+  { label: '1Y', days: 252 },
+  { label: '2Y', days: 504 },
+  { label: '3Y', days: 756 },
 ];
 
-// 6개월 평가 노드 인덱스 (priceGenerator의 STOCK_EVAL_WEEKS과 일치)
-const EVAL_WEEKS = [0, 26, 52, 78, 104, 130, 156];
+// 6개월(126 거래일) 단위 평가 노드 (priceGenerator.STOCK_EVAL_DAYS와 동기화)
+const EVAL_DAYS = [...STOCK_EVAL_DAYS];
 
 // ELS 임계값
 const REDEMPTION_LINE = 0.85;  // 조기상환 85%
 const KNOCKIN_LINE    = 0.50;  // 녹인 50%
 
 const BASE_PRICE = 50000;
+
+// 각 기간별 애니메이션 파라미터
+// 목표: 모든 기간이 약 8~10초 안에 완료되도록 스트라이드(건너뛰기) 조정
+const REVEAL_TARGET_MS = 9000; // 총 애니메이션 목표 시간 (ms)
+const TICK_INTERVAL_MS = 32;   // requestAnimationFrame에 맞춘 최소 간격 (ms)
 
 // ──────────────────── Custom Recharts components ────────────────────
 
@@ -546,7 +552,7 @@ function ChartTooltip({ active, payload }: CustomTooltipProps) {
       minWidth: 130,
     }}>
       <p style={{ color: '#727785', marginBottom: 3 }}>
-        {Math.round((pt.index / 52) * 12)}개월차
+        {Math.round(pt.index / 21)}개월차
       </p>
       <p style={{ color: textColor, fontSize: 15, marginBottom: 2 }}>
         {pt.krwPrice.toLocaleString()}원
@@ -554,7 +560,7 @@ function ChartTooltip({ active, payload }: CustomTooltipProps) {
       <p style={{ color: '#727785', fontSize: 11 }}>{pct}% (시작가 대비)</p>
       {pt.isEvalNode && pt.index > 0 && (
         <p style={{ color: '#006d37', fontSize: 10, marginTop: 4 }}>
-          📍 {Math.round((pt.index / 52) * 12)}개월 평가일
+          📍 {Math.round(pt.index / 21)}개월 평가일
         </p>
       )}
     </div>
@@ -590,123 +596,120 @@ function RefLabel({ viewBox, label, color, above = true }: RefLabelProps) {
 // ──────────────────── Main component ────────────────────
 
 export default function StockPage() {
-  // Price & chart state
-  const [fullPath, setFullPath]           = useState<StockPoint[]>([]);
-  const [revealedCount, setRevealedCount] = useState(0);
-  const [selectedPeriod, setSelectedPeriod] = useState(3); // index into PERIODS (default 3Y)
-  const [isAnimating, setIsAnimating]     = useState(false);
+  // ── Chart state ──
+  const [visibleData, setVisibleData]       = useState<StockPoint[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState(3); // 기본 3Y
 
-  // Live-ticker price (last revealed point's KRW)
+  // ── Live price shown in the ticker header ──
   const [price, setPrice] = useState(BASE_PRICE);
 
-  // Trading state
-  const [wallet, setWallet]   = useState(1_000_000);
-  const [stocks, setStocks]   = useState(0);
+  // ── Trading state ──
+  const [wallet, setWallet]     = useState(1_000_000);
+  const [stocks, setStocks]     = useState(0);
   const [avgPrice, setAvgPrice] = useState(0);
-  const [qty, setQty]         = useState(1);
-  const [tab, setTab]         = useState<'buy' | 'sell'>('buy');
+  const [qty, setQty]           = useState(1);
+  const [tab, setTab]           = useState<'buy' | 'sell'>('buy');
   const [notification, setNotification] = useState<string | null>(null);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const animRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fullPathRef = useRef<StockPoint[]>([]);
   const BASE = 47600;
 
-  // Generate path on mount and whenever period changes
-  useEffect(() => {
-    const weeks = PERIODS[selectedPeriod].weeks;
-    const path  = generateStockPath(weeks, BASE_PRICE);
-    setFullPath(path);
-    setRevealedCount(0);
-    setIsAnimating(false);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-  }, [selectedPeriod]);
+  const stopAll = useCallback(() => {
+    if (animRef.current)  { clearInterval(animRef.current);  animRef.current  = null; }
+    if (liveRef.current)  { clearInterval(liveRef.current);  liveRef.current  = null; }
+  }, []);
 
-  // Auto-start animation shortly after path is ready
-  useEffect(() => {
-    if (fullPath.length === 0 || isAnimating) return;
+  // ── Build and start a new path ──
+  const startPath = useCallback((periodIdx: number) => {
+    stopAll();
+    const days = PERIODS[periodIdx].days;
+    const path = generateStockPath(days, BASE_PRICE);
+    fullPathRef.current = path;
 
-    // Small delay so UI settles first
-    const startDelay = setTimeout(() => {
-      setRevealedCount(1);
-      setIsAnimating(true);
-    }, 300);
+    // 애니메이션 스트라이드: 목표 시간 안에 완료되도록 한 번에 몇 틱씩 추가할지 결정
+    // stride=1이면 매 tick마다 1포인트, stride>1이면 건너뛰기
+    const totalTicks = Math.ceil(REVEAL_TARGET_MS / TICK_INTERVAL_MS); // ≈ 281
+    const stride = Math.max(1, Math.ceil(days / totalTicks));
 
-    return () => clearTimeout(startDelay);
-  }, [fullPath, isAnimating]);
+    let cursor = 0;
+    setVisibleData([path[0]]);
+    setPrice(path[0].krwPrice);
 
-  // Drive the animation tick
-  useEffect(() => {
-    if (!isAnimating || fullPath.length === 0) return;
-    if (revealedCount >= fullPath.length) {
-      setIsAnimating(false);
-      return;
-    }
-
-    intervalRef.current = setInterval(() => {
-      setRevealedCount(prev => {
-        const next = prev + 1;
-        const pt = fullPath[next - 1];
-        if (pt) setPrice(pt.krwPrice);
-        if (next >= fullPath.length) {
-          clearInterval(intervalRef.current!);
-          setIsAnimating(false);
-        }
-        return next;
+    animRef.current = setInterval(() => {
+      cursor = Math.min(cursor + stride, path.length - 1);
+      setVisibleData(prev => {
+        const lastIdx = prev[prev.length - 1]?.index ?? -1;
+        if (path[cursor].index <= lastIdx) return prev;
+        const toAdd = path.slice(lastIdx + 1, cursor + 1);
+        return [...prev, ...toAdd];
       });
-    }, 40); // 40ms/tick → 156 ticks ≈ 6.2s for 3Y
+      setPrice(path[cursor].krwPrice);
 
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isAnimating, fullPath]); // eslint-disable-line react-hooks/exhaustive-deps
+      if (cursor >= path.length - 1) {
+        clearInterval(animRef.current!);
+        animRef.current = null;
+        // 라이브 GBM 연장 시작
+        startLiveTicker(path[path.length - 1], path.length);
+      }
+    }, TICK_INTERVAL_MS);
+  }, [stopAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // After animation completes, continue with a slower live ticker
-  useEffect(() => {
-    if (isAnimating) return;
-    if (fullPath.length === 0) return;
-
-    const ticker = setInterval(() => {
-      setPrice(prev => {
-        const change = Math.floor((Math.random() - 0.48) * 400);
-        return Math.max(10000, prev + change);
+  // ── 라이브 GBM 티커: 같은 모델로 자연스럽게 연장 ──
+  // 2초마다 1 거래일 연장 → 실제 시장처럼 느린 업데이트
+  const startLiveTicker = useCallback((lastPt: StockPoint, nextIdx: number) => {
+    let cur = lastPt;
+    let idx = nextIdx;
+    liveRef.current = setInterval(() => {
+      const next = extendStockPath(cur, BASE_PRICE, idx);
+      cur = next;
+      idx++;
+      setPrice(next.krwPrice);
+      setVisibleData(prev => {
+        // 차트에는 마지막 N개만 유지해 메모리 폭증 방지 (최대 원래 경로 길이만큼)
+        const maxLen = fullPathRef.current.length;
+        const trimmed = prev.length >= maxLen ? prev.slice(1) : prev;
+        return [...trimmed, next];
       });
-    }, 2000);
+    }, 2000); // 2초 = 실제 거래일 1일 경과 느낌
+  }, []);
 
-    return () => clearInterval(ticker);
-  }, [isAnimating, fullPath]);
+  useEffect(() => () => stopAll(), [stopAll]);
 
-  // Cleanup on unmount
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+  // ── 기간 변경 → 새 경로 재생성 ──
+  useEffect(() => {
+    startPath(selectedPeriod);
+  }, [selectedPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Visible data slice (for animation reveal)
-  const visibleData = useMemo(
-    () => fullPath.slice(0, Math.max(revealedCount, 0)),
-    [fullPath, revealedCount]
-  );
-
-  // Latest visible point for color logic
-  const latestPt  = visibleData[visibleData.length - 1];
+  // ── 파생 값 ──
+  const latestPt   = visibleData[visibleData.length - 1];
   const isPositive = latestPt ? latestPt.price >= 1.0 : true;
   const lineColor  = isPositive ? '#0059b9' : '#ba1a1a';
   const gradId     = isPositive ? 'stockGradBlue' : 'stockGradRed';
 
-  // Y domain: pad 10% above/below the visible range
+  // Y 도메인: 보이는 범위의 15% 패딩 (단, 좌우 이동 시 축이 너무 많이 뛰지 않도록 소수점 1자리로 반올림)
   const yDomain = useMemo((): [number, number] => {
-    if (visibleData.length === 0) return [0.4, 1.6];
+    if (visibleData.length === 0) return [0.6, 1.4];
     const prices = visibleData.map(p => p.price);
-    const mn = Math.min(...prices);
-    const mx = Math.max(...prices);
-    const pad = (mx - mn) * 0.15 || 0.1;
+    const mn  = Math.min(...prices);
+    const mx  = Math.max(...prices);
+    const pad = Math.max((mx - mn) * 0.12, 0.06);
+    // 1자리 반올림 → 축이 조금씩만 움직임
     return [
-      parseFloat((Math.max(0.1, mn - pad)).toFixed(2)),
-      parseFloat((mx + pad).toFixed(2)),
+      Math.floor((mn - pad) * 10) / 10,
+      Math.ceil((mx  + pad) * 10) / 10,
     ];
   }, [visibleData]);
 
-  // X ticks: only eval nodes that are within the visible range
+  // X 틱: 보이는 범위 내 평가 노드만
+  const lastVisibleIdx = visibleData[visibleData.length - 1]?.index ?? 0;
   const xTicks = useMemo(
-    () => EVAL_WEEKS.filter(w => w <= (visibleData[visibleData.length - 1]?.index ?? 0)),
-    [visibleData]
+    () => EVAL_DAYS.filter(d => d <= lastVisibleIdx),
+    [lastVisibleIdx]
   );
 
-  // Trading
+  // ── 거래 ──
   const notify = useCallback((msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 2000);
@@ -737,17 +740,8 @@ export default function StockPage() {
   const diff    = price - BASE;
   const diffPct = ((diff / BASE) * 100).toFixed(1);
 
-  // Replay animation
-  const replay = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setRevealedCount(0);
-    setTimeout(() => {
-      const weeks = PERIODS[selectedPeriod].weeks;
-      const path  = generateStockPath(weeks, BASE_PRICE);
-      setFullPath(path);
-      setIsAnimating(false);
-    }, 100);
-  }, [selectedPeriod]);
+  // ↺ 재생성 버튼
+  const replay = useCallback(() => startPath(selectedPeriod), [selectedPeriod, startPath]);
 
   return (
     <PageLayout>
@@ -836,7 +830,7 @@ export default function StockPage() {
                   <XAxis
                     dataKey="index"
                     ticks={xTicks}
-                    tickFormatter={w => `${Math.round((w / 52) * 12)}M`}
+                    tickFormatter={w => `${Math.round(w / 21)}M`}
                     tick={{ fontSize: 10, fill: '#727785', fontWeight: 600 }}
                     tickLine={false}
                     axisLine={{ stroke: '#c1c6d6' }}
