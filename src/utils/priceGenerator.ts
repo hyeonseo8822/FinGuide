@@ -194,7 +194,7 @@ export function extendStockPath(last: StockPoint, basePrice: number, dayIndex: n
  * @returns 조기상환 발생 주 인덱스, 없으면 -1
  */
 export function findEarlyRedemptionIndex(path: PricePoint[], barrierRatio: number): number {
-  const evalNodes = EVAL_INDICES.slice(1); // 0 제외
+  const evalNodes = EVAL_INDICES.slice(1, -1); // 0, 156(만기) 제외 — 만기는 조기상환 아님
   for (const nodeIdx of evalNodes) {
     if (nodeIdx >= path.length) break;
     const pt = path[nodeIdx];

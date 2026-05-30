@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import PageLayout from '../components/layout/PageLayout';
-import { quizQuestions } from '../data/quizQuestions';
+import { pickQuestions } from '../data/quizQuestions';
+import type { QuizQuestion } from '../types/simulation';
 
 // OX 퀴즈: 4문제 순서대로, 진도 바 + 피드백 오버레이
 // 큰 O/X 버튼으로 학생이 직관적으로 선택할 수 있도록 설계
@@ -117,19 +118,13 @@ const OXCircle = styled.div<{ $type: 'O' | 'X' }>`
   align-items: center;
   justify-content: center;
 
-  span.material-symbols-outlined {
-    font-size: 100px;
-    color: ${({ $type, theme }) => $type === 'O' ? theme.colors.primary : theme.colors.dangerRed};
-    font-variation-settings: 'wght' 700;
-  }
+  font-size: 100px;
+  color: ${({ $type, theme }) => $type === 'O' ? theme.colors.primary : theme.colors.dangerRed};
 
   @media (min-width: 768px) {
     width: 160px;
     height: 160px;
-
-    span.material-symbols-outlined {
-      font-size: 128px;
-    }
+    font-size: 128px;
   }
 `;
 
@@ -174,11 +169,7 @@ const FeedbackIconCircle = styled.div<{ $correct: boolean }>`
   justify-content: center;
   background: ${({ $correct, theme }) => $correct ? theme.colors.secondaryContainer : theme.colors.errorContainer};
 
-  span.material-symbols-outlined {
-    font-size: 64px;
-    color: ${({ $correct, theme }) => $correct ? theme.colors.onSecondaryContainer : theme.colors.onErrorContainer};
-    font-variation-settings: 'wght' 700;
-  }
+  font-size: 64px;
 `;
 
 const FeedbackTitle = styled.h2<{ $correct: boolean }>`
@@ -250,32 +241,41 @@ const RestartBtn = styled.button`
   &:hover { transform: scale(1.05); }
 `;
 
+// 세션 시작 시 문제 세트 확정 (5문제), 재도전 시 새 세트 생성
+const QUIZ_SIZE = 5;
+
 export default function QuizPage() {
+  // useRef로 세션 문제를 보관 — 리렌더 시 재생성 방지
+  const sessionQs = useRef<QuizQuestion[]>(pickQuestions(QUIZ_SIZE));
+
   const [current, setCurrent] = useState(0);
   const [score, setScore] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [done, setDone] = useState(false);
 
-  const progress = ((current) / quizQuestions.length) * 100;
+  const questions = sessionQs.current;
+  const progress = (current / questions.length) * 100;
 
   const handleAnswer = useCallback((answer: 'O' | 'X') => {
-    const correct = answer === quizQuestions[current].answer;
+    const correct = answer === questions[current].answer;
     if (correct) setScore(s => s + 1);
     setLastCorrect(correct);
     setShowFeedback(true);
-  }, [current]);
+  }, [current, questions]);
 
   const closeFeedback = useCallback(() => {
     setShowFeedback(false);
-    if (current + 1 >= quizQuestions.length) {
+    if (current + 1 >= questions.length) {
       setDone(true);
     } else {
       setCurrent(c => c + 1);
     }
-  }, [current]);
+  }, [current, questions.length]);
 
   const restart = useCallback(() => {
+    // 새 세트로 교체
+    sessionQs.current = pickQuestions(QUIZ_SIZE);
     setCurrent(0);
     setScore(0);
     setDone(false);
@@ -287,11 +287,11 @@ export default function QuizPage() {
       <PageLayout>
         <ScoreScreen>
           <h2>퀴즈 완료! 🎉</h2>
-          <ScoreBig>{score} / {quizQuestions.length}</ScoreBig>
+          <ScoreBig>{score} / {questions.length}</ScoreBig>
           <p>
-            {score === quizQuestions.length
+            {score === questions.length
               ? '완벽해요! 금융 전문가 등극! 🏆'
-              : score >= 3
+              : score >= Math.ceil(questions.length * 0.6)
               ? '훌륭해요! 조금만 더 공부하면 만점이에요!'
               : '괜찮아요, 다시 도전해봐요!'}
           </p>
@@ -301,17 +301,17 @@ export default function QuizPage() {
     );
   }
 
-  const q = quizQuestions[current];
+  const q = questions[current];
 
   return (
     <PageLayout>
       <ProgressSection>
         <ProgressLabelRow>
           <span style={{ fontSize: 16, fontWeight: 700, color: '#0059b9' }}>
-            오늘의 퀴즈 {current + 1}/{quizQuestions.length}
+            {current + 1} / {questions.length} 문제
           </span>
           <span style={{ fontSize: 16, fontWeight: 700, color: '#414754' }}>
-            {(current) * 200} 코인 획득
+            {score}점
           </span>
         </ProgressLabelRow>
         <ProgressTrack>
@@ -321,21 +321,17 @@ export default function QuizPage() {
 
       <QuestionCard>
         <QuestionText>{q.question}</QuestionText>
-        <Hint>틀리면 아쉬운 기회! 신중하게 골라보세요.</Hint>
+        <Hint>신중하게 생각하고 골라보세요.</Hint>
       </QuestionCard>
 
       <ButtonsGrid>
         <OXButton $type="O" onClick={() => handleAnswer('O')}>
-          <OXCircle $type="O">
-            <span className="material-symbols-outlined">radio_button_unchecked</span>
-          </OXCircle>
+          <OXCircle $type="O">○</OXCircle>
           <OXLabel $type="O">맞아요!</OXLabel>
         </OXButton>
 
         <OXButton $type="X" onClick={() => handleAnswer('X')}>
-          <OXCircle $type="X">
-            <span className="material-symbols-outlined">close</span>
-          </OXCircle>
+          <OXCircle $type="X">✕</OXCircle>
           <OXLabel $type="X">틀려요!</OXLabel>
         </OXButton>
       </ButtonsGrid>
@@ -344,20 +340,14 @@ export default function QuizPage() {
       <OverlayBg $visible={showFeedback}>
         <FeedbackCard>
           <FeedbackIconCircle $correct={lastCorrect}>
-            <span className="material-symbols-outlined">
-              {lastCorrect ? 'check_circle' : 'error'}
-            </span>
+            {lastCorrect ? '✅' : '❌'}
           </FeedbackIconCircle>
           <FeedbackTitle $correct={lastCorrect}>
             {lastCorrect ? '정답이에요!' : '아쉬워요!'}
           </FeedbackTitle>
-          <FeedbackDesc>
-            {lastCorrect
-              ? `정말 똑똑하시네요! +200 코인!\n${q.explanation}`
-              : q.explanation}
-          </FeedbackDesc>
+          <FeedbackDesc>{q.explanation}</FeedbackDesc>
           <NextBtn onClick={closeFeedback}>
-            {current + 1 >= quizQuestions.length ? '결과 보기' : '다음 문제로 가기'}
+            {current + 1 >= questions.length ? '결과 보기' : '다음 문제로 가기'}
           </NextBtn>
         </FeedbackCard>
       </OverlayBg>
