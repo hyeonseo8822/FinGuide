@@ -73,13 +73,11 @@ export default function PageLayout({ children }: Props) {
         <HeaderInner>
           <Logo to="/">FinGuide</Logo>
           <DesktopNav>
-            <DesktopNavLink to="/" end>Home</DesktopNavLink>
+            <DesktopNavLink to="/" end>ELS 설명</DesktopNavLink>
             <DesktopNavLink to="/els">ELS 실험</DesktopNavLink>
-            <DesktopNavLink to="/etf">ETF 실험</DesktopNavLink>
-            <DesktopNavLink to="/quiz">Quiz</DesktopNavLink>
-            <DesktopNavLink to="/stock">주식 시뮬</DesktopNavLink>
+            <DesktopNavLink to="/preference">나의 투자 성향</DesktopNavLink>
+            <DesktopNavLink to="/quiz">퀴즈</DesktopNavLink>
           </DesktopNav>
-          <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#0059b9', cursor: 'pointer' }}>account_circle</span>
         </HeaderInner>
       </Header>
       <Main>{children}</Main>

@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { Link } from 'react-router-dom';
 
 // 사이트 상단 고정 헤더: 브랜드 + 섹션 앵커 링크
 const Nav = styled.nav`
@@ -21,7 +22,7 @@ const Inner = styled.div`
   gap: ${({ theme }) => theme.spacing.md};
 `;
 
-const Logo = styled.a`
+const Logo = styled(Link)`
   font-size: 20px;
   font-weight: 800;
   color: ${({ theme }) => theme.colors.primary};
@@ -37,7 +38,7 @@ const Links = styled.ul`
   }
 `;
 
-const NavLink = styled.a`
+const NavLink = styled(Link)`
   font-size: 14px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.onSurfaceVariant};
@@ -52,12 +53,12 @@ export default function Header() {
   return (
     <Nav>
       <Inner>
-        <Logo href="#hero">FinGuide</Logo>
+        <Logo to="/">FinGuide</Logo>
         <Links>
-          <li><NavLink href="#comparison">비교</NavLink></li>
-          <li><NavLink href="#els-simulator">ELS 시뮬레이터</NavLink></li>
-          <li><NavLink href="#etf-simulator">ETF 비교</NavLink></li>
-          <li><NavLink href="#quiz">퀴즈</NavLink></li>
+          <li><NavLink to="/">ELS 쉽게 배우기</NavLink></li>
+          <li><NavLink to="/els">ELS 실험</NavLink></li>
+          <li><NavLink to="/preference">나의 투자 성향</NavLink></li>
+          <li><NavLink to="/quiz">퀴즈</NavLink></li>
         </Links>
       </Inner>
     </Nav>

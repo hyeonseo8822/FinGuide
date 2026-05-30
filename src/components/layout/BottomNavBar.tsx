@@ -43,33 +43,27 @@ const NavItem = styled(NavLink)`
     transform: scale(1.1);
   }
 
-  span.material-symbols-outlined {
-    font-size: 24px;
-  }
+`;
+
+const NavIcon = styled.span`
+  font-size: 22px;
+  line-height: 1;
 `;
 
 export default function BottomNavBar() {
   return (
     <Nav>
       <NavItem to="/" end>
-        <span className="material-symbols-outlined">home</span>
-        Home
+        <NavIcon>🎲</NavIcon>
+        ELS 실험
       </NavItem>
-      <NavItem to="/els">
-        <span className="material-symbols-outlined">card_giftcard</span>
-        ELS
-      </NavItem>
-      <NavItem to="/etf">
-        <span className="material-symbols-outlined">shopping_basket</span>
-        ETF
+      <NavItem to="/preference">
+        <NavIcon>🧭</NavIcon>
+        성향 찾기
       </NavItem>
       <NavItem to="/quiz">
-        <span className="material-symbols-outlined">quiz</span>
-        Quiz
-      </NavItem>
-      <NavItem to="/stock">
-        <span className="material-symbols-outlined">monitoring</span>
-        주식
+        <NavIcon>📝</NavIcon>
+        퀴즈
       </NavItem>
     </Nav>
   );
