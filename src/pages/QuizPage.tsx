@@ -70,13 +70,6 @@ const QuestionText = styled.h1`
   }
 `;
 
-const Hint = styled.p`
-  margin-top: ${({ theme }) => theme.spacing.md};
-  font-size: 18px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.onSurfaceVariant};
-`;
-
 const ButtonsGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -321,7 +314,6 @@ export default function QuizPage() {
 
       <QuestionCard>
         <QuestionText>{q.question}</QuestionText>
-        <Hint>신중하게 생각하고 골라보세요.</Hint>
       </QuestionCard>
 
       <ButtonsGrid>

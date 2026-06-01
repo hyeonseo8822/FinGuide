@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { comparisonData } from '../../data/comparisonData';
 
-// 예금 vs ETF vs ELS 비교 매트릭스
+// 예적금 vs ETF vs ELS 비교 매트릭스
 // 색상 코드로 위험도를 직관적으로 표현: 초록(안전) → 주황(주의) → 빨강(위험)
 
 const Section = styled.section`
@@ -112,14 +112,14 @@ export default function ComparisonMatrix() {
           viewport={{ once: true }}
           transition={{ duration: 0.4 }}
         >
-          <SectionTitle>예금 vs ETF vs ELS, 무엇이 다를까요?</SectionTitle>
+          <SectionTitle>예적금 vs ETF vs ELS, 무엇이 다를까요?</SectionTitle>
           <SectionDesc>세 가지 금융상품의 핵심 차이를 한눈에 비교해 보세요.</SectionDesc>
           <TableWrapper>
             <Table>
               <thead>
                 <tr>
                   <Th>비교 항목</Th>
-                  <Th $color="#e8f5e9">예금 🟢</Th>
+                  <Th $color="#e8f5e9">예적금 🟢</Th>
                   <Th $color="#fff3e0">ETF 🟡</Th>
                   <Th $color="#ffebee">ELS 🔴</Th>
                 </tr>

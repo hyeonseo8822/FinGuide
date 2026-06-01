@@ -71,14 +71,13 @@ export default function PageLayout({ children }: Props) {
     <Wrapper>
       <Header>
         <HeaderInner>
-          <Logo to="/">FinGuide</Logo>
-          <DesktopNav>
-            <DesktopNavLink to="/" end>ELS 설명</DesktopNavLink>
-            <DesktopNavLink to="/els">ELS 실험</DesktopNavLink>
-            <DesktopNavLink to="/preference">나의 투자 성향</DesktopNavLink>
-            <DesktopNavLink to="/quiz">퀴즈</DesktopNavLink>
-          </DesktopNav>
-        </HeaderInner>
+                <Logo to="/">FinGuide</Logo>
+                <DesktopNav>
+                  <DesktopNavLink to="/">ELS 실험</DesktopNavLink>
+                  <DesktopNavLink to="/preference">나의 투자 성향</DesktopNavLink>
+                  <DesktopNavLink to="/quiz">퀴즈</DesktopNavLink>
+                </DesktopNav>
+              </HeaderInner>
       </Header>
       <Main>{children}</Main>
       <BottomNavBar />

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 import PageLayout from '../components/layout/PageLayout';
 
@@ -88,8 +89,8 @@ const StartButton = styled.button`
   font-size: 15px;
   font-weight: 900;
   color: white;
-  background: linear-gradient(135deg, #0059b9 0%, #006d37 100%);
-  box-shadow: 0 12px 30px rgba(0, 89, 185, 0.18);
+  background: #0059b9;
+  box-shadow: 0 12px 30px rgba(0, 89, 185, 0.12);
   cursor: pointer;
   transition: transform 0.12s ease, filter 0.12s ease;
 
@@ -389,18 +390,22 @@ const GuideLine = styled.div`
 const CTAWrap = styled.div`
   margin-top: 20px;
   display: flex;
+  flex-direction: column;
   justify-content: center;
+  align-items: stretch;
+  gap: 12px;
 `;
 
 const CTAButton = styled.button`
+  width: 100%;
   border: none;
   border-radius: 16px;
   padding: 16px 22px;
   font-size: 16px;
   font-weight: 900;
   color: white;
-  background: linear-gradient(135deg, #0059b9 0%, #006d37 100%);
-  box-shadow: 0 12px 30px rgba(0, 89, 185, 0.18);
+  background: #0059b9;
+  box-shadow: 0 12px 30px rgba(0, 89, 185, 0.12);
   cursor: pointer;
   transition: transform 0.12s ease, filter 0.12s ease;
 
@@ -416,6 +421,18 @@ const CTAButton = styled.button`
     cursor: not-allowed;
     opacity: 0.5;
     filter: none;
+  }
+`;
+
+const QuizButton = styled(CTAButton)`
+  background: linear-gradient(135deg, #0059b9 0%, #0d73e0 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 32px rgba(0, 89, 185, 0.24);
+  transform: translateY(-1px);
+
+  &:hover {
+    filter: brightness(1.06);
   }
 `;
 
@@ -450,7 +467,7 @@ const SECTION_GUIDES: Record<SectionKey, { typeLabel: string; fitLabel: string; 
     },
     SAVINGS: {
         typeLabel: '위험 회피형 투자자',
-        fitLabel: '예금에 적합합니다',
+        fitLabel: '예적금에 적합합니다',
         icon: '🛡️',
         summary: '안전하게 자산을 지키는 성향이에요.',
         lines: ['위험 낮음', '수익 낮음'],
@@ -460,7 +477,7 @@ const SECTION_GUIDES: Record<SectionKey, { typeLabel: string; fitLabel: string; 
 const PRODUCT_DESCS: Record<SectionKey, string> = {
     ELS: '높은 수익을 노리지만 원금 손실 가능성이 있어요.',
     ETF: '여러 자산에 분산 투자해 위험을 낮춰요.',
-    SAVINGS: '원금 보존 중심의 안전한 예금 상품이에요.',
+    SAVINGS: '원금 보존 중심의 안전한 예적금 상품이에요.',
 };
 
 interface GameSection {
@@ -500,7 +517,7 @@ const SECTION_DEFS: SectionDef[] = [
     },
     {
         key: 'SAVINGS',
-        name: '예금',
+        name: '예적금',
         shortLabel: 'S',
         emoji: '🛡️',
         accent: '#904800',
@@ -510,7 +527,8 @@ const SECTION_DEFS: SectionDef[] = [
     },
 ];
 
-export default function HomePage() {
+export default function InvestmentPreferencePage() {
+  const navigate = useNavigate();
     const [balance, setBalance] = useState(20000);
     const [walletAnim, setWalletAnim] = useState(false);
     const [phase, setPhase] = useState<Phase>('idle');
@@ -669,6 +687,7 @@ export default function HomePage() {
 
                                         <CTAWrap>
                                             <CTAButton onClick={startGame}>다시 하기</CTAButton>
+                                          <QuizButton onClick={() => navigate('/quiz')}>퀴즈 풀러가기 →</QuizButton>
                                         </CTAWrap>
                                     </ResultCenter>
                                 </ResultCard>
@@ -700,7 +719,7 @@ export default function HomePage() {
 
                         <GuideCard $accent={SECTION_DEFS.find((d) => d.key === 'SAVINGS')!.accent}>
                             <GuideIcon>{SECTION_GUIDES.SAVINGS.icon}</GuideIcon>
-                            <GuideCardTitle>예금</GuideCardTitle>
+                            <GuideCardTitle>예적금</GuideCardTitle>
                             <GuideLines>
                                 {SECTION_GUIDES.SAVINGS.lines.map((line) => (
                                     <GuideLine key={line}>{line}</GuideLine>

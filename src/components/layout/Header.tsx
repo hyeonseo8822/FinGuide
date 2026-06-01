@@ -55,8 +55,7 @@ export default function Header() {
       <Inner>
         <Logo to="/">FinGuide</Logo>
         <Links>
-          <li><NavLink to="/">ELS 쉽게 배우기</NavLink></li>
-          <li><NavLink to="/els">ELS 실험</NavLink></li>
+          <li><NavLink to="/">ELS 실험</NavLink></li>
           <li><NavLink to="/preference">나의 투자 성향</NavLink></li>
           <li><NavLink to="/quiz">퀴즈</NavLink></li>
         </Links>

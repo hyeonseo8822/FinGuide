@@ -23,7 +23,7 @@ const theme = {
     onPrimaryContainer: '#fefcff',
     inversePrimary: '#acc7ff',
 
-    // Secondary (Safe Green — 예금, 안전)
+    // Secondary (Safe Green — 예적금, 안전)
     secondary: '#006d37',
     onSecondary: '#ffffff',
     secondaryContainer: '#6bfe9c',

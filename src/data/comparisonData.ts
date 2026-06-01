@@ -1,8 +1,8 @@
-// PLAN.md §8.3: 예금 vs ETF vs ELS 비교 매트릭스 데이터
+// PLAN.md §8.3: 예적금 vs ETF vs ELS 비교 매트릭스 데이터
 
 export interface ComparisonRow {
   feature: string;       // 비교 항목
-  deposit: string;       // 예금
+  deposit: string;       // 예적금
   etf: string;           // ETF
   els: string;           // ELS
   depositLevel: 'safe' | 'caution' | 'danger';
@@ -30,7 +30,7 @@ export const comparisonData: ComparisonRow[] = [
     elsLevel: 'danger',
   },
   {
-    feature: '예금자 보호',
+    feature: '예적금자 보호',
     deposit: '5천만 원 이하 보호',
     etf: '해당 없음',
     els: '해당 없음',

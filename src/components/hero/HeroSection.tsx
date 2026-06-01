@@ -91,7 +91,7 @@ export default function HeroSection() {
           transition={{ duration: 0.5, delay: 0.2 }}
         >
           <Subtitle>
-            예금자보호도 없고, 원금 보장도 없습니다.
+            예적금자보호도 없고, 원금 보장도 없습니다.
             시뮬레이터로 직접 체험하고 위험을 이해해 보세요.
           </Subtitle>
         </motion.div>
