@@ -210,21 +210,21 @@ All complex terms render a `?` icon that opens an inline tooltip:
 ## 8. Data Files Specification
 
 ### 8.1 `data/quizQuestions.ts` — 4 OX questions
-1. "은행이 판매하는 ELS는 예금자보호법으로 보호받는다" → **X**
+1. "은행이 판매하는 ELS는 예적금자보호법으로 보호받는다" → **X**
 2. "ELS에서 Knock-In이 발생하면 원금 손실이 확정된다" → **X** (손실 가능성이 높아질 뿐, 만기 가격에 따라 결정)
 3. "ETF는 여러 종목에 분산투자하므로 단일 종목보다 변동성이 낮다" → **O**
-4. "ELS 연 수익률이 10%라면 은행 예금보다 반드시 유리하다" → **X**
+4. "ELS 연 수익률이 10%라면 은행 예적금보다 반드시 유리하다" → **X**
 
 ### 8.2 `data/checklistItems.ts` — 5 receipt disclaimers
 1. "이 상품은 원금을 보장하지 않습니다."
 2. "Knock-In 발생 시 만기에 원금 손실이 발생할 수 있습니다."
-3. "예금자보호법 적용 대상이 아닙니다."
+3. "예적금자보호법 적용 대상이 아닙니다."
 4. "중도 환매 시 손실이 발생할 수 있습니다."
 5. "높은 수익률은 그만큼 높은 위험을 수반합니다."
 
 ### 8.3 `data/comparisonData.ts` — Comparison Matrix rows
-Rows: 원금보장 | 수익구조 | 예금자보호 | 위험도 | 적합 투자자  
-Columns: 예금 (green) | ETF (yellow) | ELS (red)
+Rows: 원금보장 | 수익구조 | 예적금자보호 | 위험도 | 적합 투자자  
+Columns: 예적금 (green) | ETF (yellow) | ELS (red)
 
 ---
 

@@ -24,7 +24,7 @@ Title:
 
 Display two visual cards.
 
-### 🐷 예금
+### 🐷 예적금
 
 * 원금 보호
 * 결과가 정해짐
@@ -65,7 +65,7 @@ Question:
 
 Display two large cards:
 
-### 🐷 예금
+### 🐷 예적금
 
 안전하게 돈 모으기
 
@@ -125,7 +125,7 @@ Title:
 
 ## 🏆 결과 확인
 
-### 🐷 예금
+### 🐷 예적금
 
 1,000만 원
 
@@ -155,7 +155,7 @@ Winner Card:
 
 ELS는 조기상환에 성공했어요.
 
-예금보다 5만 원을 더 벌 수 있었어요.
+예적금보다 5만 원을 더 벌 수 있었어요.
 
 Requirements:
 
@@ -185,7 +185,7 @@ Display:
 
 ---
 
-### 🐷 예금
+### 🐷 예적금
 
 😊 원금 보호
 
@@ -215,7 +215,7 @@ Title:
 
 Display:
 
-### 예금
+### 예적금
 
 안전하지만 수익이 적어요.
 
@@ -239,7 +239,7 @@ Use separate screens.
 
 Screen 1
 
-ELS vs 예금 비교
+ELS vs 예적금 비교
 
 ↓
 
@@ -318,7 +318,7 @@ Especially:
 * 실패
 * 최종 금액
 * 원금 손실 가능
-* 예금 vs ELS 비교
+* 예적금 vs ELS 비교
 
 Use:
 
@@ -339,10 +339,3 @@ Do not list organizations that were not referenced.
 
 Example:
 
-## 출처 및 참고자료
-
-이 페이지의 내용은 아래 자료를 참고했어요.
-
-* 금융감독원
-* 금융투자협회
-* 실제 사용한 자료만 표시
