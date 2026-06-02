@@ -16,24 +16,6 @@ The goal is to help users understand the structure, rewards, and risks of ELS th
 
 ---
 
-# Remove Current Structure
-
-Remove:
-
-* Samsung Electronics real stock data
-* 2023 case study
-* Fixed historical scenarios
-* Long report-style explanations
-* "Minjun's Choice" story
-* ELS checklist section
-* OX quiz section from the ELS page
-
-Move OX quizzes to the Quiz tab.
-
-Keep educational content concise and visual.
-
----
-
 # Replace "Minjun's Choice" With "My Choice"
 
 Instead of showing a character making decisions, the user should become the main character.
