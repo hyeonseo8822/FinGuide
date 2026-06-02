@@ -331,11 +331,3 @@ Avoid long paragraphs.
 
 ---
 
-# 10. References
-
-Display only sources that were actually used.
-
-Do not list organizations that were not referenced.
-
-Example:
-
