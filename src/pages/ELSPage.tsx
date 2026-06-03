@@ -1132,15 +1132,32 @@ export default function ELSPage() {
                 <SItem href="https://data.krx.co.kr" target="_blank" rel="noopener noreferrer">
                   <SIcon>📈</SIcon>
                   <SText>
-                    <p>한국거래소 (KRX) 정보데이터시스템</p>
-                    <p>삼성전자(005930) 종가 데이터를 참고했습니다.</p>
+                    <p>한국거래소 (KRX)</p>
+                    <p>삼성전자(005930) 2025년 일별 종가 데이터 — 주가 시나리오 반영.</p>
                   </SText>
                 </SItem>
+
                 <SItem href="https://ecos.bok.or.kr" target="_blank" rel="noopener noreferrer">
                   <SIcon>🏦</SIcon>
                   <SText>
                     <p>한국은행 경제통계시스템 (ECOS)</p>
-                    <p>기간별 예적금은행 가중평균금리를 참고했습니다.</p>
+                    <p>2025년 정기예금 수신금리 통계 — 예적금 금리 근거.</p>
+                  </SText>
+                </SItem>
+
+                <SItem href="https://fine.fss.or.kr" target="_blank" rel="noopener noreferrer">
+                  <SIcon>📜</SIcon>
+                  <SText>
+                    <p>금융감독원 파인 (FINE)</p>
+                    <p>파생결합증권(ELS) 녹인·투자자 유의사항 참고.</p>
+                  </SText>
+                </SItem>
+
+                <SItem href="https://kdic.or.kr" target="_blank" rel="noopener noreferrer">
+                  <SIcon>🛡️</SIcon>
+                  <SText>
+                    <p>예금보험공사 (KDIC)</p>
+                    <p>예금자보호제도 운영 기준 — 정기예금 보호 한도 근거.</p>
                   </SText>
                 </SItem>
               </SourceList>
