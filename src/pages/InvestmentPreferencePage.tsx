@@ -153,14 +153,14 @@ const CTAWrap = styled.div`
   flex-wrap: wrap;
 `;
 
-const CTAButton = styled.button`
+const CTAButton = styled.button<{ $highlight?: boolean }>`
   border: none;
   border-radius: 18px;
   padding: 16px 22px;
   font-size: 30px;
   font-weight: 900;
-  color: white;
-  background: #0059b9;
+  color: ${({ $highlight }) => ($highlight ? '#000000' : 'white')};
+  background: ${({ $highlight }) => ($highlight ? '#ffeb3b' : '#0059b9')};
   cursor: pointer;
 `;
 
@@ -364,7 +364,7 @@ export default function InvestmentPreferencePage() {
 
               <CTAWrap>
                 <CTAButton onClick={restartQuiz}>다시 하기</CTAButton>
-                <CTAButton onClick={() => navigate('/quiz')}>퀴즈 페이지로 이동</CTAButton>
+                <CTAButton $highlight onClick={() => navigate('/quiz')}>복습 퀴즈하기</CTAButton>
               </CTAWrap>
             </ResultSection>
           )}

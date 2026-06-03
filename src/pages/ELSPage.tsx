@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
@@ -28,6 +28,33 @@ function krw(n: number) { return n.toLocaleString('ko-KR') + '원'; }
 
 type Choice = 'savings' | 'els';
 type Screen = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+const ELS_PAGE_STORAGE_KEY = 'finguide:els-page-state';
+
+function loadELSPageState(): { screen: Screen; choice: Choice | null } {
+  if (typeof window === 'undefined') {
+    return { screen: 0, choice: null };
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(ELS_PAGE_STORAGE_KEY);
+    if (!storedValue) {
+      return { screen: 0, choice: null };
+    }
+
+    const parsedValue = JSON.parse(storedValue) as Partial<{ screen: Screen; choice: Choice | null }>;
+    const screen = typeof parsedValue.screen === 'number' && parsedValue.screen >= 0 && parsedValue.screen <= 7
+      ? parsedValue.screen
+      : 0;
+    const choice = parsedValue.choice === 'savings' || parsedValue.choice === 'els'
+      ? parsedValue.choice
+      : null;
+
+    return { screen, choice };
+  } catch {
+    return { screen: 0, choice: null };
+  }
+}
 
 // ─── 애니메이션 ───────────────────────────────────────────────
 
@@ -78,11 +105,32 @@ const Dot = styled.div<{ $active: boolean; $done: boolean }>`
 `;
 
 const BackBtn = styled.button`
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 30px; font-weight: 800;
-  color: ${({ theme }) => theme.colors.onSurfaceVariant};
-  background: none; border: none; cursor: pointer; padding: 0; margin-bottom: 2px;
-  &:hover { color: ${({ theme }) => theme.colors.onSurface}; }
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  font-size: 30px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.onSurface};
+  background: ${({ theme }) => theme.colors.surfaceContainerLow};
+  border: 1px solid ${({ theme }) => theme.colors.surfaceContainer};
+  border-radius: 18px;
+  cursor: pointer;
+  padding: 10px 16px 10px 12px;
+  margin-bottom: 2px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  &:hover {
+    background: ${({ theme }) => theme.colors.surfaceContainer};
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(0,0,0,0.08);
+  }
+`;
+
+const BackArrowIcon = styled.img`
+  width: 28px;
+  height: 28px;
+  display: block;
 `;
 
 const Card = styled.div`
@@ -305,7 +353,8 @@ const CondLabel = styled.p<{ $color: string }>`
 // ─── 화면 3: 선택 버튼 ───────────────────────────────────────
 
 const ChoiceBtn = styled.button<{ $accent: string }>`
-  background: white; border-radius: 24px; padding: 30px 18px;
+  position: relative;
+  background: white; border-radius: 24px; padding: 48px 18px 30px;
   border: 2.5px solid transparent;
   box-shadow: 0 5px 18px rgba(0,0,0,0.08);
   text-align: center; cursor: pointer; width: 100%;
@@ -326,6 +375,21 @@ const ChTag   = styled.span<{ $color: string }>`
   background: ${({ $color }) => $color}18; color: ${({ $color }) => $color};
   font-size: 30px; font-weight: 800;
   padding: 6px 16px; border-radius: 9999px;
+`;
+const ClickHint = styled.div`
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: #ffeb3b;
+  color: #d32f2f;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 `;
 
 // ─── 화면 4: 주가 전체 공개 ──────────────────────────────────
@@ -573,10 +637,22 @@ const SText = styled.div`
 `;
 export default function ELSPage() {
   const navigate = useNavigate();
-  const [screen, setScreen] = useState<Screen>(0);
-  const [choice, setChoice] = useState<Choice | null>(null);
+  const initialState = loadELSPageState();
+  const [screen, setScreen] = useState<Screen>(initialState.screen);
+  const [choice, setChoice] = useState<Choice | null>(initialState.choice);
 
   const TOTAL = 8;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(
+      ELS_PAGE_STORAGE_KEY,
+      JSON.stringify({ screen, choice }),
+    );
+  }, [screen, choice]);
 
   const go = (s: Screen) => {
     setScreen(s);
@@ -592,6 +668,9 @@ export default function ELSPage() {
   const reset = () => {
     setScreen(0);
     setChoice(null);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(ELS_PAGE_STORAGE_KEY);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -657,7 +736,10 @@ export default function ELSPage() {
         ══════════════════════════════════════════ */}
         {screen === 1 && (
           <ScreenWrap>
-            <BackBtn onClick={() => go(0)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(0)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             <div style={{ textAlign: 'center' }}>
               <ScreenTitle>상품 정보 확인</ScreenTitle>
@@ -735,7 +817,10 @@ export default function ELSPage() {
         ══════════════════════════════════════════ */}
         {screen === 2 && (
           <ScreenWrap>
-            <BackBtn onClick={() => go(1)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(1)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             <div style={{ textAlign: 'center' }}>
               <BigEmoji>📋</BigEmoji>
@@ -817,7 +902,10 @@ export default function ELSPage() {
         ══════════════════════════════════════════ */}
         {screen === 3 && (
           <ScreenWrap>
-            <BackBtn onClick={() => go(2)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(2)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             <div style={{ textAlign: 'center' }}>
               <BigEmoji>🎮</BigEmoji>
@@ -833,6 +921,7 @@ export default function ELSPage() {
                 <ChName>예적금</ChName>
                 <ChDesc>안전하게 이자를 받을 수 있어요</ChDesc>
                 <ChTag $color="#904800">연 3.5% 이자</ChTag>
+                <ClickHint>클릭</ClickHint>
               </ChoiceBtn>
 
               <ChoiceBtn $accent="#0059b9" onClick={() => handleChoose('els')}>
@@ -840,6 +929,7 @@ export default function ELSPage() {
                 <ChName>ELS</ChName>
                 <ChDesc>조건 충족 시 더 높은 수익</ChDesc>
                 <ChTag $color="#0059b9">연 8% 기대수익</ChTag>
+                <ClickHint>클릭</ClickHint>
               </ChoiceBtn>
             </TwoCol>
 
@@ -856,7 +946,10 @@ export default function ELSPage() {
         ══════════════════════════════════════════ */}
         {screen === 4 && (
           <ScreenWrap>
-            <BackBtn onClick={() => go(3)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(3)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             <div style={{ textAlign: 'center' }}>
               <ScreenTitle style={{ fontSize: 'clamp(34px, 7vw, 56px)' }}>📈 2025년 삼성전자 주가</ScreenTitle>
@@ -910,7 +1003,7 @@ export default function ELSPage() {
             {/* 성공 로직 설명 */}
             <Card style={{ padding: '26px 22px', background: '#ffff4b', border: '1.5px solid #006d3733' }}>
               <p style={{ fontSize: 50, fontWeight: 800, color: '#c74848', marginBottom: 16, textAlign: 'center' }}>
-                조기 상환 조건 달성!!! <br />(시작 주가의 85% 이상)
+                조기 상환 6개월만에 조건 달성!!! <br />(시작 주가의 85% 이상)
               </p>
             </Card>
 
@@ -926,7 +1019,10 @@ export default function ELSPage() {
         {screen === 5 && (
           <ScreenWrap>
             {/* 예적금 경로는 화면 4를 건너뛰었으므로 화면 3으로 */}
-            <BackBtn onClick={() => go(choice === 'savings' ? 3 : 4)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(choice === 'savings' ? 3 : 4)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             <ResultPosterStack>
               <ResultPoster>
@@ -951,7 +1047,10 @@ export default function ELSPage() {
         ══════════════════════════════════════════ */}
         {screen === 6 && (
           <ScreenWrap>
-            <BackBtn onClick={() => go(5)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(5)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             {/* ── 예적금 선택 경로: 예적금 장점 강조 + 소형 ELS 비교 ── */}
             {choice === 'savings' && (
@@ -1096,7 +1195,10 @@ export default function ELSPage() {
         ══════════════════════════════════════════ */}
         {screen === 7 && (
           <ScreenWrap>
-            <BackBtn onClick={() => go(6)}>← 뒤로</BackBtn>
+            <BackBtn onClick={() => go(6)}>
+              <BackArrowIcon src="/img/back-arrow.svg" alt="" aria-hidden="true" />
+              뒤로
+            </BackBtn>
 
             <LessonCard>
               <div style={{ fontSize: 44, marginBottom: 12 }}>📖</div>
@@ -1133,7 +1235,7 @@ export default function ELSPage() {
                   <SIcon>📈</SIcon>
                   <SText>
                     <p>한국거래소 (KRX)</p>
-                    <p>삼성전자(005930) 2025년 일별 종가 데이터 — 주가 시나리오 반영.</p>
+                    <p>2025년도 삼성전자 주가 참고</p>
                   </SText>
                 </SItem>
 
